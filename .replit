@@ -49,3 +49,7 @@ args = "go run ./cmd/pos add \"Coffee\" 3.50 10 && go run ./cmd/pos inventory &&
 
 [deployment]
 run = ["sh", "-c", "go run ./cmd/pos"]
+
+[[ports]]
+localPort = 8000
+externalPort = 80
