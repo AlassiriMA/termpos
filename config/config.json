@@ -1,0 +1,65 @@
+{
+  "system": {
+    "default_mode": "classic",
+    "server_port": 8000,
+    "log_level": "info",
+    "db_path": "./pos.db",
+    "backup_path": "./backups",
+    "backup_frequency": "daily",
+    "backup_retention_days": 7,
+    "backup_encrypt": true
+  },
+  "business": {
+    "name": "SiriApps",
+    "address": "Banruwe 36",
+    "city": "Maastricht",
+    "state": "LI",
+    "zip": "6218VP",
+    "country": "NL",
+    "phone": "+31610979730",
+    "email": "me@alassiri.nl",
+    "website": "alassiri.nl",
+    "currency": "USD",
+    "tax_rate": 8,
+    "timezone": "UTC"
+  },
+  "features": {
+    "enable_loyalty_program": true,
+    "enable_staff_management": true,
+    "enable_audit_logging": true,
+    "enable_email_receipts": false,
+    "enable_low_stock_alerts": true
+  },
+  "security": {
+    "min_password_length": 8,
+    "password_require_mixed_case": true,
+    "password_require_number": true,
+    "password_require_special": true,
+    "session_timeout_minutes": 30,
+    "max_login_attempts": 5
+  },
+  "integrations": {
+    "email": {
+      "enabled": false,
+      "provider": "smtp",
+      "host": "",
+      "port": 587,
+      "username": "",
+      "password": "",
+      "from_email": "",
+      "from_name": ""
+    },
+    "payment_gateway": {
+      "enabled": false,
+      "provider": "",
+      "api_key": "",
+      "webhook_secret": ""
+    },
+    "accounting": {
+      "enabled": false,
+      "provider": "",
+      "api_key": "",
+      "company_id": ""
+    }
+  }
+}

@@ -10,6 +10,7 @@ require (
 )
 
 require (
+	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect

@@ -1,6 +1,7 @@
 package main
 
 import (
+        "context"
         "encoding/json"
         "fmt"
         "net/http"
@@ -48,23 +49,33 @@ func authMiddleware(next http.HandlerFunc, permission string) http.HandlerFunc {
                         return
                 }
 
-                // In a token-based system, we would parse the token from
-                // Authorization header, verify and then use it to authenticate.
-                // For now, we'll just check if the user is already authenticated
-                // and has the required permission.
-                if !auth.IsAuthenticated() {
-                        http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
-                        return
-                }
-                
-                // Check permission
-                if err := auth.RequirePermission(permission); err != nil {
-                        http.Error(w, fmt.Sprintf("Unauthorized: %v", err), http.StatusUnauthorized)
+                // Extract the token
+                tokenString := parts[1]
+
+                // Validate the JWT token
+                claims, err := auth.ValidateJWT(tokenString)
+                if err != nil {
+                        http.Error(w, fmt.Sprintf("Invalid token: %v", err), http.StatusUnauthorized)
                         return
                 }
 
-                // Call the next handler
-                next(w, r)
+                // Check if user has required permission
+                user := models.User{
+                        ID:       claims.UserID,
+                        Username: claims.Username,
+                        Role:     models.Role(claims.Role),
+                }
+
+                if !auth.HasPermission(&user, permission) {
+                        http.Error(w, "Unauthorized: insufficient permissions", http.StatusForbidden)
+                        return
+                }
+
+                // Store user information in request context for later use
+                ctx := context.WithValue(r.Context(), "user", &user)
+                
+                // Call the next handler with the updated context
+                next(w, r.WithContext(ctx))
         }
 }
 
@@ -85,33 +96,52 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
-        token, err := auth.Login(creds.Username, creds.Password, db.GetUserByUsername, db.UpdateLastLogin)
+        session, err := auth.Login(creds.Username, creds.Password, db.GetUserByUsername, db.UpdateLastLogin)
         if err != nil {
                 http.Error(w, fmt.Sprintf("Authentication failed: %v", err), http.StatusUnauthorized)
                 return
         }
 
-        // Create a token string response
-        tokenStr := fmt.Sprintf("%d:%s:%s", token.UserID, token.Username, token.Role)
+        // Generate JWT token
+        jwtToken, err := auth.GenerateJWT(session.UserID, session.Username, string(session.Role))
+        if err != nil {
+                http.Error(w, fmt.Sprintf("Failed to generate token: %v", err), http.StatusInternalServerError)
+                return
+        }
+
+        // Return the token and user information
+        response := map[string]interface{}{
+                "token": jwtToken,
+                "user": map[string]interface{}{
+                        "id":       session.UserID,
+                        "username": session.Username,
+                        "role":     session.Role,
+                },
+                "expires_in": 86400, // 24 hours in seconds
+        }
 
         w.Header().Set("Content-Type", "application/json")
-        json.NewEncoder(w).Encode(map[string]string{"token": tokenStr})
+        json.NewEncoder(w).Encode(response)
 }
 
 // productHandler handles requests based on HTTP method and required permissions
 func productHandler(w http.ResponseWriter, r *http.Request) {
+        // User has already been authenticated by the middleware
+        // Now check specific permissions based on the HTTP method
         switch r.Method {
         case http.MethodGet:
-                // View products requires inventory:view permission
-                if err := auth.RequirePermission("inventory:view"); err != nil {
-                        http.Error(w, fmt.Sprintf("Unauthorized: %v", err), http.StatusUnauthorized)
+                // Check if user info is available in the context
+                user, ok := r.Context().Value("user").(*models.User)
+                if !ok || !auth.HasPermission(user, "product:read") {
+                        http.Error(w, "Unauthorized: insufficient permissions", http.StatusForbidden)
                         return
                 }
                 handleGetProducts(w, r)
         case http.MethodPost:
-                // Add products requires product:manage permission
-                if err := auth.RequirePermission("product:manage"); err != nil {
-                        http.Error(w, fmt.Sprintf("Unauthorized: %v", err), http.StatusUnauthorized)
+                // Check if user info is available in the context
+                user, ok := r.Context().Value("user").(*models.User)
+                if !ok || !auth.HasPermission(user, "product:create") {
+                        http.Error(w, "Unauthorized: insufficient permissions", http.StatusForbidden)
                         return
                 }
                 handleAddProduct(w, r)
@@ -122,18 +152,22 @@ func productHandler(w http.ResponseWriter, r *http.Request) {
 
 // productByIDHandler handles requests based on HTTP method and required permissions
 func productByIDHandler(w http.ResponseWriter, r *http.Request) {
+        // User has already been authenticated by the middleware
+        // Now check specific permissions based on the HTTP method
         switch r.Method {
         case http.MethodGet:
-                // View product requires inventory:view permission
-                if err := auth.RequirePermission("inventory:view"); err != nil {
-                        http.Error(w, fmt.Sprintf("Unauthorized: %v", err), http.StatusUnauthorized)
+                // Check if user info is available in the context
+                user, ok := r.Context().Value("user").(*models.User)
+                if !ok || !auth.HasPermission(user, "product:read") {
+                        http.Error(w, "Unauthorized: insufficient permissions", http.StatusForbidden)
                         return
                 }
                 handleGetProductByID(w, r)
         case http.MethodPut:
-                // Update product requires product:manage permission
-                if err := auth.RequirePermission("product:manage"); err != nil {
-                        http.Error(w, fmt.Sprintf("Unauthorized: %v", err), http.StatusUnauthorized)
+                // Check if user info is available in the context
+                user, ok := r.Context().Value("user").(*models.User)
+                if !ok || !auth.HasPermission(user, "product:update") {
+                        http.Error(w, "Unauthorized: insufficient permissions", http.StatusForbidden)
                         return
                 }
                 handleUpdateProductStock(w, r)
@@ -144,18 +178,22 @@ func productByIDHandler(w http.ResponseWriter, r *http.Request) {
 
 // salesHandler handles requests based on HTTP method and required permissions
 func salesHandler(w http.ResponseWriter, r *http.Request) {
+        // User has already been authenticated by the middleware
+        // Now check specific permissions based on the HTTP method
         switch r.Method {
         case http.MethodGet:
-                // View sales requires report:generate permission
-                if err := auth.RequirePermission("report:generate"); err != nil {
-                        http.Error(w, fmt.Sprintf("Unauthorized: %v", err), http.StatusUnauthorized)
+                // Check if user info is available in the context
+                user, ok := r.Context().Value("user").(*models.User)
+                if !ok || !auth.HasPermission(user, "sale:read") {
+                        http.Error(w, "Unauthorized: insufficient permissions", http.StatusForbidden)
                         return
                 }
                 handleGetSales(w, r)
         case http.MethodPost:
-                // Add sales requires sales:create permission
-                if err := auth.RequirePermission("sales:create"); err != nil {
-                        http.Error(w, fmt.Sprintf("Unauthorized: %v", err), http.StatusUnauthorized)
+                // Check if user info is available in the context
+                user, ok := r.Context().Value("user").(*models.User)
+                if !ok || !auth.HasPermission(user, "sale:create") {
+                        http.Error(w, "Unauthorized: insufficient permissions", http.StatusForbidden)
                         return
                 }
                 handleAddSale(w, r)
@@ -165,13 +203,31 @@ func salesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func startAgentServer(port int) error {
-        // Authentication endpoints
+        fmt.Println("Starting Agent server...")
+        
+        // Initialize JWT authentication
+        fmt.Println("Initializing JWT authentication...")
+        auth.InitJWT()
+        
+        fmt.Println("Setting up HTTP routes...")
+        
+        // Basic health check endpoint (public)
+        http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusOK)
+                json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+        })
+        
+        // Authentication endpoints (public)
         http.HandleFunc("/auth/login", handleLogin)
         
-        // Product, sales and inventory routes
-        http.HandleFunc("/products", productHandler)
-        http.HandleFunc("/products/", productByIDHandler)
-        http.HandleFunc("/sales", salesHandler)
+        // Protected routes - requires authentication + specific permissions
+        // Product routes
+        http.HandleFunc("/products", authMiddleware(productHandler, "product:read"))
+        http.HandleFunc("/products/", authMiddleware(productByIDHandler, "product:read"))
+        
+        // Sales routes
+        http.HandleFunc("/sales", authMiddleware(salesHandler, "sale:read"))
         
         // Report routes - all require report:generate permission
         http.HandleFunc("/reports/sales", authMiddleware(handleSalesReport, "report:generate"))

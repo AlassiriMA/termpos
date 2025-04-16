@@ -325,31 +325,10 @@ func ListCustomers(filter string, limit, offset int) ([]models.CustomerSummary, 
 
 // LinkSaleToCustomer associates a sale with a customer and updates loyalty points
 func LinkSaleToCustomer(saleID, customerID, pointsEarned, pointsUsed int, rewardID int) error {
-        // Retry logic for handling database locks
-        var err error
-        maxRetries := 5
-        retryDelay := 100 * time.Millisecond
-        
-        for attempt := 1; attempt <= maxRetries; attempt++ {
-                // Try the operation
-                err = linkSaleToCustomerWithTransaction(saleID, customerID, pointsEarned, pointsUsed, rewardID)
-                
-                // If successful or error is not a locked database, return
-                if err == nil || !isDBLockedError(err) {
-                        return err
-                }
-                
-                // If this was the last attempt, return the error
-                if attempt == maxRetries {
-                        return fmt.Errorf("database still locked after %d attempts: %w", maxRetries, err)
-                }
-                
-                // Wait before retrying with exponential backoff
-                retryDelay = retryDelay * 2
-                time.Sleep(retryDelay)
-        }
-        
-        return err // Should never reach here
+        // Use the centralized retry logic
+        return WithRetry(func() error {
+                return linkSaleToCustomerWithTransaction(saleID, customerID, pointsEarned, pointsUsed, rewardID)
+        })
 }
 
 // linkSaleToCustomerWithTransaction performs the actual database operations within a transaction
@@ -418,19 +397,6 @@ func linkSaleToCustomerWithTransaction(saleID, customerID, pointsEarned, pointsU
         }
         
         return nil
-}
-
-// isDBLockedError checks if an error is a database locked error
-func isDBLockedError(err error) bool {
-        if err == nil {
-                return false
-        }
-        return err.Error() == "database is locked" || 
-               err.Error() == "database table is locked" ||
-               err.Error() == "database busy" ||
-               err.Error() == "locked" ||
-               err.Error() == "busy" ||
-               err.Error() == "resource temporarily unavailable"
 }
 
 // GetLoyaltyRewards retrieves all available loyalty rewards
@@ -502,6 +468,22 @@ func GetLoyaltyReward(id int) (models.LoyaltyReward, error) {
 
 // RedeemLoyaltyReward uses customer points to redeem a reward
 func RedeemLoyaltyReward(customerID, rewardID int) (models.LoyaltyReward, error) {
+        var reward models.LoyaltyReward
+        
+        // Use the centralized retry logic
+        err := WithRetry(func() error {
+                var err error
+                reward, err = redeemLoyaltyRewardWithTransaction(customerID, rewardID)
+                return err
+        })
+        
+        return reward, err
+}
+
+// redeemLoyaltyRewardWithTransaction performs the actual reward redemption within a transaction
+func redeemLoyaltyRewardWithTransaction(customerID, rewardID int) (models.LoyaltyReward, error) {
+        var reward models.LoyaltyReward
+        
         // Begin transaction
         tx, err := DB.Begin()
         if err != nil {
@@ -509,7 +491,6 @@ func RedeemLoyaltyReward(customerID, rewardID int) (models.LoyaltyReward, error)
         }
         
         // Get reward details
-        var reward models.LoyaltyReward
         err = tx.QueryRow(
                 "SELECT id, name, description, points_cost, discount_value, is_percentage, valid_days, active FROM loyalty_rewards WHERE id = ?",
                 rewardID,

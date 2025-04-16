@@ -180,9 +180,12 @@ func RecordSale(sale models.Sale) (int, error) {
                         }
                         
                         // Link the sale to the customer and update their loyalty points
-                        err = db.LinkSaleToCustomer(int(id), sale.CustomerID, pointsEarned, sale.PointsUsed, sale.RewardID)
-                        if err != nil {
-                                return fmt.Errorf("failed to link sale to customer: %w", err)
+                        // This operation has its own transaction and retry logic
+                        linkErr := db.LinkSaleToCustomer(int(id), sale.CustomerID, pointsEarned, sale.PointsUsed, sale.RewardID)
+                        if linkErr != nil {
+                                // Log the error but don't fail the entire sale
+                                fmt.Printf("Warning: Failed to link sale to customer: %v\n", linkErr)
+                                // We continue with the transaction since the sale itself succeeded
                         }
                 }
 

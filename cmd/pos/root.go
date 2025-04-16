@@ -79,6 +79,7 @@ func init() {
         // Initialize the CLI commands
         initClassicCommands()
         initAgentCommand()
+        initMinimalAgentCommand()  // Add the minimal agent command
         initAssistantCommand()
         initUserCommands()
         initStaffCommands()

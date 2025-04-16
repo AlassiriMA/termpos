@@ -202,7 +202,11 @@ func HasPermission(user *models.User, permission string) bool {
                 switch permission {
                 case "setting:read", "setting:backup", "setting:export",
                         "product:read", "product:create", "product:update",
-                        "sale:create", "user:read", "role:read",
+                        "sale:read", "sale:create", "user:read", "role:read",
+                        "inventory:view",
+                        // API specific permissions
+                        "product:manage",
+                        "sales:create",
                         // New workflow permissions
                         PermissionConfigureWorkflows, PermissionRunBackups, 
                         PermissionGenerateReports:
@@ -215,7 +219,7 @@ func HasPermission(user *models.User, permission string) bool {
         // Cashier permissions
         if user.Role == "cashier" {
                 switch permission {
-                case "product:read", "sale:create":
+                case "product:read", "sale:create", "sale:read", "inventory:view":
                         return true
                 default:
                         return false

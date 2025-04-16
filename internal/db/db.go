@@ -547,6 +547,14 @@ func RecordSale(sale models.Sale) (int, error) {
 
 // Transaction wraps a database transaction
 func Transaction(fn func(*sql.Tx) error) error {
+        // Use the retry mechanism for transaction operations
+        return WithRetry(func() error {
+                return executeTransaction(fn)
+        })
+}
+
+// executeTransaction handles the actual transaction logic
+func executeTransaction(fn func(*sql.Tx) error) error {
         tx, err := DB.Begin()
         if err != nil {
                 return fmt.Errorf("failed to begin transaction: %w", err)

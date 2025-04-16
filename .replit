@@ -67,6 +67,30 @@ args = "Sensitive Data Test"
 task = "workflow.run"
 args = "Loyalty Customer Test"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Mobile Payment Demo (Fixed)"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Loyalty Customer Test (Fixed)"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Receipt Demo (Fixed)"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Agent Mode Server"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Minimal Agent Server"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "JWT Minimal Server"
+
 [[workflows.workflow]]
 name = "Terminal POS"
 author = "agent"
@@ -107,7 +131,7 @@ task = "packager.installForAll"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "go run ./cmd/pos login admin password123"
+args = "go run ./cmd/pos staff login admin password123"
 
 [[workflows.workflow]]
 name = "Receipt Demo"
@@ -262,6 +286,93 @@ task = "packager.installForAll"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "go run ./cmd/pos sell 1 2 --customer-id 1 --print-receipt"
+
+[[workflows.workflow]]
+name = "Mobile Payment Demo (Fixed)"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run ./cmd/pos sell 83 3 --payment-method \"mobile\" --payment-ref \"MPESA123456\" --phone \"555-123-4567\" --notes \"Customer wants gluten-free next time\" --print-receipt --tax-rate 10.0"
+
+[[workflows.workflow]]
+name = "Loyalty Customer Test (Fixed)"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run ./cmd/pos sell 83 2 --customer-id 1 --print-receipt"
+
+[[workflows.workflow]]
+name = "Receipt Demo (Fixed)"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run ./cmd/pos sell 83 2 --discount 0.5 --discount-code \"SUMMER10\" --payment-method \"card\" --payment-ref \"TX123456\" --email \"customer@example.com\" --print-receipt --tax-rate 8.5"
+
+[[workflows.workflow]]
+name = "Agent Mode Server"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run ./cmd/pos agent --port 5000"
+waitForPort = 5000
+
+[[workflows.workflow]]
+name = "Minimal Agent Server"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run ./cmd/pos agent-minimal --port 5000"
+waitForPort = 5000
+
+[[workflows.workflow]]
+name = "JWT Minimal Server"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run minimal_jwt_server.go"
+waitForPort = 5000
 
 [deployment]
 run = ["sh", "-c", "go run ./cmd/pos"]

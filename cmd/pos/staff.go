@@ -471,6 +471,42 @@ func initStaffCommands() {
         staffCmd.AddCommand(staffFindCmd)
         staffCmd.AddCommand(staffSetRoleCmd)
         
+        // Add login command for testing JWT authentication
+        var loginCmd = &cobra.Command{
+                Use:   "login [username] [password]",
+                Short: "Test login credentials",
+                Long:  `Test login credentials and display the resulting JWT token.`,
+                Args:  cobra.ExactArgs(2),
+                RunE: func(cmd *cobra.Command, args []string) error {
+                        username := args[0]
+                        password := args[1]
+                        
+                        // Initialize JWT
+                        auth.InitJWT()
+                        
+                        // Attempt login
+                        session, err := auth.Login(username, password, db.GetUserByUsername, db.UpdateLastLogin)
+                        if err != nil {
+                                return fmt.Errorf("authentication failed: %v", err)
+                        }
+                        
+                        // Generate JWT token
+                        token, err := auth.GenerateJWT(session.UserID, session.Username, string(session.Role))
+                        if err != nil {
+                                return fmt.Errorf("failed to generate token: %v", err)
+                        }
+                        
+                        // Print authentication result with token
+                        fmt.Println("Authentication successful!")
+                        fmt.Println("User:", session.Username)
+                        fmt.Println("Role:", session.Role)
+                        fmt.Println("JWT Token:", token)
+                        
+                        return nil
+                },
+        }
+        staffCmd.AddCommand(loginCmd)
+        
         // Add flags to the staff add command
         staffAddCmd.Flags().StringVar(&staffFullName, "full-name", "", "Staff member's full name")
         staffAddCmd.Flags().StringVar(&staffEmail, "email", "", "Staff member's email address")
