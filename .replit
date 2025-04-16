@@ -1,0 +1,51 @@
+modules = ["go"]
+
+[nix]
+channel = "stable-24_05"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Terminal POS"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "pos_classic_mode"
+
+[[workflows.workflow]]
+name = "Terminal POS"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run ./cmd/pos"
+
+[[workflows.workflow]]
+name = "pos_classic_mode"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run ./cmd/pos add \"Coffee\" 3.50 10 && go run ./cmd/pos inventory && go run ./cmd/pos sell 1 2"
+
+[deployment]
+run = ["sh", "-c", "go run ./cmd/pos"]
