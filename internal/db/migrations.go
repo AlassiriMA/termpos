@@ -37,6 +37,7 @@ func RunMigrations() error {
                 {17, "create_customer_sales_table", createCustomerSalesTable},
                 {18, "create_loyalty_redemptions_table", createLoyaltyRedemptionsTable},
                 {19, "alter_sales_table_for_customers", alterSalesTableForCustomers},
+                {20, "alter_users_table_for_staff", alterUsersTableForStaff},
         }
 
         for _, m := range migrations {

@@ -57,6 +57,7 @@ func init() {
         initAgentCommand()
         initAssistantCommand()
         initUserCommands()
+        initStaffCommands()
 }
 
 // initConfig reads in config file if set
