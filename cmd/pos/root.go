@@ -13,10 +13,12 @@ import (
 )
 
 var (
-        cfgFile string
-        dbPath  string
-        mode    string
-        port    int
+        cfgFile    string
+        dbPath     string
+        mode       string
+        port       int
+        showBanner bool
+        debug      bool
 
         rootCmd = &cobra.Command{
                 Use:   "pos",
@@ -26,6 +28,26 @@ var (
 2. Agent Mode — HTTP server for remote commands
 3. AI Assistant Mode — Natural language interface`,
                 PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+                        // Show welcome banner if enabled
+                        if showBanner && cmd.Use != "version" && cmd.Use != "help" {
+                                PrintWelcomeBanner()
+                        }
+
+                        // Check for first-run scenario
+                        configFile := filepath.Join("./config", "config.json")
+                        if _, err := os.Stat(configFile); os.IsNotExist(err) {
+                                // Config file doesn't exist and it's not the init command
+                                if cmd.Use != "init" && cmd.Use != "version" && cmd.Use != "help" {
+                                        fmt.Println(cyan("Welcome to TermPOS!"))
+                                        fmt.Println(cyan("It looks like this is your first time running the application."))
+                                        fmt.Println(yellow("Run './termpos init' to set up your system with the interactive configuration wizard."))
+                                        fmt.Println()
+                                }
+                        }
+                        
+                        // Check if database directories exist
+                        ensureDirectoriesExist()
+                        
                         // Initialize database
                         if err := db.Initialize(dbPath); err != nil {
                                 return fmt.Errorf("failed to initialize database: %w", err)
@@ -51,6 +73,8 @@ func init() {
         rootCmd.PersistentFlags().StringVar(&dbPath, "db", "./pos.db", "database path")
         rootCmd.PersistentFlags().StringVar(&mode, "mode", "classic", "operating mode (classic, agent, assistant)")
         rootCmd.PersistentFlags().IntVar(&port, "port", 8000, "port for agent mode server")
+        rootCmd.PersistentFlags().BoolVar(&showBanner, "banner", true, "show welcome banner")
+        rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug logging")
 
         // Initialize the CLI commands
         initClassicCommands()
@@ -58,6 +82,26 @@ func init() {
         initAssistantCommand()
         initUserCommands()
         initStaffCommands()
+}
+
+// ensureDirectoriesExist makes sure required directories are available
+func ensureDirectoriesExist() {
+        // Define required directories
+        directories := []string{
+                "./data",
+                "./config",
+                "./backups",
+        }
+        
+        // Create directories if they don't exist
+        for _, dir := range directories {
+                if _, err := os.Stat(dir); os.IsNotExist(err) {
+                        if debug {
+                                fmt.Printf("Creating directory: %s\n", dir)
+                        }
+                        os.MkdirAll(dir, 0755)
+                }
+        }
 }
 
 // initConfig reads in config file if set

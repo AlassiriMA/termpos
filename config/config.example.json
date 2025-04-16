@@ -1,0 +1,65 @@
+{
+  "system": {
+    "default_mode": "classic",
+    "server_port": 8000,
+    "log_level": "info",
+    "db_path": "./pos.db",
+    "backup_path": "./backups",
+    "backup_frequency": "daily",
+    "backup_retention_days": 7,
+    "backup_encrypt": true
+  },
+  "business": {
+    "name": "My Store",
+    "address": "123 Main St",
+    "city": "Anytown",
+    "state": "State",
+    "zip": "12345",
+    "country": "Country",
+    "phone": "555-123-4567",
+    "email": "store@example.com",
+    "website": "https://example.com",
+    "currency": "USD",
+    "tax_rate": 8.0,
+    "timezone": "UTC"
+  },
+  "features": {
+    "enable_loyalty_program": true,
+    "enable_staff_management": true,
+    "enable_audit_logging": true,
+    "enable_email_receipts": false,
+    "enable_low_stock_alerts": true
+  },
+  "security": {
+    "min_password_length": 8,
+    "password_require_mixed_case": true,
+    "password_require_number": true,
+    "password_require_special": true,
+    "session_timeout_minutes": 30,
+    "max_login_attempts": 5
+  },
+  "integrations": {
+    "email": {
+      "enabled": false,
+      "provider": "smtp",
+      "host": "smtp.example.com",
+      "port": 587,
+      "username": "",
+      "password": "",
+      "from_email": "noreply@example.com",
+      "from_name": "My Store"
+    },
+    "payment_gateway": {
+      "enabled": false,
+      "provider": "stripe",
+      "api_key": "",
+      "webhook_secret": ""
+    },
+    "accounting": {
+      "enabled": false,
+      "provider": "quickbooks",
+      "api_key": "",
+      "company_id": ""
+    }
+  }
+}

@@ -325,6 +325,35 @@ func ListCustomers(filter string, limit, offset int) ([]models.CustomerSummary, 
 
 // LinkSaleToCustomer associates a sale with a customer and updates loyalty points
 func LinkSaleToCustomer(saleID, customerID, pointsEarned, pointsUsed int, rewardID int) error {
+        // Retry logic for handling database locks
+        var err error
+        maxRetries := 5
+        retryDelay := 100 * time.Millisecond
+        
+        for attempt := 1; attempt <= maxRetries; attempt++ {
+                // Try the operation
+                err = linkSaleToCustomerWithTransaction(saleID, customerID, pointsEarned, pointsUsed, rewardID)
+                
+                // If successful or error is not a locked database, return
+                if err == nil || !isDBLockedError(err) {
+                        return err
+                }
+                
+                // If this was the last attempt, return the error
+                if attempt == maxRetries {
+                        return fmt.Errorf("database still locked after %d attempts: %w", maxRetries, err)
+                }
+                
+                // Wait before retrying with exponential backoff
+                retryDelay = retryDelay * 2
+                time.Sleep(retryDelay)
+        }
+        
+        return err // Should never reach here
+}
+
+// linkSaleToCustomerWithTransaction performs the actual database operations within a transaction
+func linkSaleToCustomerWithTransaction(saleID, customerID, pointsEarned, pointsUsed int, rewardID int) error {
         // Begin transaction
         tx, err := DB.Begin()
         if err != nil {
@@ -389,6 +418,19 @@ func LinkSaleToCustomer(saleID, customerID, pointsEarned, pointsUsed int, reward
         }
         
         return nil
+}
+
+// isDBLockedError checks if an error is a database locked error
+func isDBLockedError(err error) bool {
+        if err == nil {
+                return false
+        }
+        return err.Error() == "database is locked" || 
+               err.Error() == "database table is locked" ||
+               err.Error() == "database busy" ||
+               err.Error() == "locked" ||
+               err.Error() == "busy" ||
+               err.Error() == "resource temporarily unavailable"
 }
 
 // GetLoyaltyRewards retrieves all available loyalty rewards

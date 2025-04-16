@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  termpos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: termpos:latest
+    container_name: termpos-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"  # For agent mode HTTP server
+    volumes:
+      - termpos-data:/app/data
+      - termpos-config:/app/config
+      - termpos-backups:/app/backups
+    command: ["--mode", "classic"]
+    environment:
+      - POS_DB_PATH=/app/data/pos.db
+      - POS_CONFIG_PATH=/app/config/config.json
+      - TZ=UTC
+    tty: true
+    stdin_open: true  # Keep STDIN open for interactive CLI
+
+volumes:
+  termpos-data:
+    driver: local
+  termpos-config:
+    driver: local
+  termpos-backups:
+    driver: local

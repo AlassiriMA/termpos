@@ -1,0 +1,52 @@
+# Version control
+.git
+.gitignore
+
+# Build artifacts
+/termpos
+/*.exe
+/bin/
+/build/
+
+# Database files
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Backup files
+/backups/
+
+# Configuration files with potentially sensitive data
+/config/*.json
+!/config/config.example.json
+
+# Dependency directories
+/vendor/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+*_test.go
+/test/
+/coverage/
+*.test
+*.out
+
+# Documentation
+/docs/
+/README.md
+/LICENSE
+
+# Other files not needed for build
+/.replit
+/replit.nix
