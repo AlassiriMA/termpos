@@ -29,6 +29,8 @@ func RunMigrations() error {
                 {9, "alter_products_table", alterProductsTable},
                 {10, "alter_sales_table", alterSalesTable},
                 {11, "create_settings_table", createSettingsTable},
+                {12, "create_audit_logs_table", createAuditLogsTable},
+                {13, "create_sensitive_data_table", createSensitiveDataTable},
         }
 
         for _, m := range migrations {
@@ -354,6 +356,56 @@ func createSettingsTable() error {
                 CURRENT_TIMESTAMP,
                 'system'
         );
+        `
+
+        _, err := DB.Exec(query)
+        return err
+}
+
+// createAuditLogsTable creates the audit_logs table for tracking changes
+func createAuditLogsTable() error {
+        query := `
+        CREATE TABLE audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                username TEXT NOT NULL,
+                action TEXT NOT NULL,
+                resource_type TEXT NOT NULL,
+                resource_id TEXT,
+                description TEXT,
+                previous_value TEXT,
+                new_value TEXT,
+                ip_address TEXT,
+                additional_info TEXT
+        );
+
+        -- Create indexes for faster querying
+        CREATE INDEX idx_audit_logs_timestamp ON audit_logs(timestamp);
+        CREATE INDEX idx_audit_logs_username ON audit_logs(username);
+        CREATE INDEX idx_audit_logs_action ON audit_logs(action);
+        CREATE INDEX idx_audit_logs_resource_type ON audit_logs(resource_type);
+        `
+
+        _, err := DB.Exec(query)
+        return err
+}
+
+// createSensitiveDataTable creates the sensitive_data table for storing encrypted values
+func createSensitiveDataTable() error {
+        query := `
+        CREATE TABLE sensitive_data (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                resource_type TEXT NOT NULL,
+                resource_id INTEGER NOT NULL,
+                field_name TEXT NOT NULL,
+                encrypted_value TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(resource_type, resource_id, field_name)
+        );
+
+        -- Create index for faster lookup
+        CREATE INDEX idx_sensitive_data_resource ON sensitive_data(resource_type, resource_id);
         `
 
         _, err := DB.Exec(query)

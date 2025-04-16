@@ -6,6 +6,7 @@ import (
         "fmt"
         "os"
         "path/filepath"
+        "strings"
         "time"
 
         "termpos/internal/models"
@@ -156,27 +157,45 @@ func GetSettingValue(keyPath string) (string, error) {
 // BackupDatabaseViaVacuum creates a backup of the database using SQLite's VACUUM INTO command
 // This is an alternative method to the file-based approach in db.go
 func BackupDatabaseViaVacuum(backupPath string) error {
-        if backupPath == "" {
-                settings, err := GetSettings()
+        // If a full path with filename is provided, use it directly
+        isFullPath := strings.HasSuffix(backupPath, ".db")
+        
+        // If it's not a full path, treat it as a directory
+        if !isFullPath {
+                if backupPath == "" {
+                        settings, err := GetSettings()
+                        if err != nil {
+                                return err
+                        }
+                        backupPath = settings.Backup.BackupPath
+                }
+
+                // Ensure backup directory exists
+                err := ensureBackupDir(backupPath)
                 if err != nil {
                         return err
                 }
-                backupPath = settings.Backup.BackupPath
+
+                // Create backup timestamp and filename
+                timestamp := time.Now().Format("20060102_150405")
+                backupFileName := filepath.Join(backupPath, fmt.Sprintf("pos_backup_%s.db", timestamp))
+                backupPath = backupFileName
+        } else {
+                // Ensure the directory for the full path exists
+                dir := filepath.Dir(backupPath)
+                if err := ensureBackupDir(dir); err != nil {
+                        return err
+                }
         }
 
-        // Ensure backup directory exists
-        err := ensureBackupDir(backupPath)
-        if err != nil {
-                return err
+        // Check if path exists as a directory
+        if fileInfo, err := os.Stat(backupPath); err == nil && fileInfo.IsDir() {
+                return fmt.Errorf("backup path %s is a directory; expected a file path", backupPath)
         }
-
-        // Create backup timestamp
-        timestamp := time.Now().Format("20060102_150405")
-        backupFileName := fmt.Sprintf("%s/pos_backup_%s.db", backupPath, timestamp)
 
         // Use SQLite's backup mechanism
-        backup := fmt.Sprintf("VACUUM INTO '%s'", backupFileName)
-        _, err = DB.Exec(backup)
+        backup := fmt.Sprintf("VACUUM INTO '%s'", backupPath)
+        _, err := DB.Exec(backup)
         if err != nil {
                 return fmt.Errorf("failed to create database backup: %w", err)
         }

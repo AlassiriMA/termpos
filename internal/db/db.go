@@ -70,6 +70,24 @@ func Close() error {
         return nil
 }
 
+// GetDB returns the database connection
+func GetDB() (*sql.DB, error) {
+        if DB == nil {
+                return nil, fmt.Errorf("database not initialized")
+        }
+        return DB, nil
+}
+
+// CloseDB closes the database connection and sets DB to nil
+func CloseDB() error {
+        if DB != nil {
+                err := DB.Close()
+                DB = nil
+                return err
+        }
+        return nil
+}
+
 // BackupDatabase creates a backup of the database to the specified directory
 func BackupDatabase(backupDir string) error {
         // Use default backup location if not specified
