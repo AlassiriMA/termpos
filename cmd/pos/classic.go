@@ -9,6 +9,7 @@ import (
         "github.com/olekukonko/tablewriter"
         "github.com/spf13/cobra"
 
+        "termpos/internal/auth"
         "termpos/internal/db"
         "termpos/internal/handlers"
         "termpos/internal/models"
@@ -23,6 +24,11 @@ func initClassicCommands() {
                 Long:  `Add a new product to the inventory with name, price, and optional stock quantity.`,
                 Args:  cobra.MinimumNArgs(2),
                 RunE: func(cmd *cobra.Command, args []string) error {
+                        // Check if user is authorized to add products
+                        if err := auth.RequirePermission("product:manage"); err != nil {
+                                return err
+                        }
+                        
                         name := args[0]
                         price, err := strconv.ParseFloat(args[1], 64)
                         if err != nil {
@@ -57,6 +63,11 @@ func initClassicCommands() {
                 Use:   "inventory",
                 Short: "List all products in inventory",
                 RunE: func(cmd *cobra.Command, args []string) error {
+                        // Check if user is authorized to view inventory
+                        if err := auth.RequirePermission("inventory:view"); err != nil {
+                                return err
+                        }
+                        
                         products, err := handlers.GetAllProducts()
                         if err != nil {
                                 return fmt.Errorf("failed to get products: %w", err)
@@ -92,6 +103,11 @@ func initClassicCommands() {
                 Long:  `Update the stock quantity for a product by ID.`,
                 Args:  cobra.ExactArgs(2),
                 RunE: func(cmd *cobra.Command, args []string) error {
+                        // Check if user is authorized to manage products
+                        if err := auth.RequirePermission("product:manage"); err != nil {
+                                return err
+                        }
+                        
                         id, err := strconv.Atoi(args[0])
                         if err != nil {
                                 return fmt.Errorf("invalid product ID: %w", err)
@@ -118,6 +134,11 @@ func initClassicCommands() {
                 Long:  `Record a sale of a product with the specified quantity.`,
                 Args:  cobra.ExactArgs(2),
                 RunE: func(cmd *cobra.Command, args []string) error {
+                        // Check if user is authorized to create sales
+                        if err := auth.RequirePermission("sales:create"); err != nil {
+                                return err
+                        }
+                        
                         productID, err := strconv.Atoi(args[0])
                         if err != nil {
                                 return fmt.Errorf("invalid product ID: %w", err)
@@ -150,6 +171,11 @@ func initClassicCommands() {
                 Long:  `Generate various reports: "sales", "inventory", "revenue", "summary", "top", "daily"`,
                 Args:  cobra.ExactArgs(1),
                 RunE: func(cmd *cobra.Command, args []string) error {
+                        // Check if user is authorized to generate reports
+                        if err := auth.RequirePermission("report:generate"); err != nil {
+                                return err
+                        }
+                        
                         reportType := strings.ToLower(args[0])
 
                         switch reportType {

@@ -5,10 +5,12 @@ import (
         "fmt"
         "net/http"
         "strconv"
+        "strings"
         "time"
 
         "github.com/spf13/cobra"
 
+        "termpos/internal/auth"
         "termpos/internal/db"
         "termpos/internal/handlers"
         "termpos/internal/models"
@@ -29,17 +31,155 @@ func initAgentCommand() {
         rootCmd.AddCommand(agentCmd)
 }
 
+// authMiddleware checks if the request has a valid authentication token
+func authMiddleware(next http.HandlerFunc, permission string) http.HandlerFunc {
+        return func(w http.ResponseWriter, r *http.Request) {
+                // Get token from Authorization header
+                authHeader := r.Header.Get("Authorization")
+                if authHeader == "" {
+                        http.Error(w, "Authorization header required", http.StatusUnauthorized)
+                        return
+                }
+
+                // Expected format: "Bearer <token>"
+                parts := strings.Split(authHeader, " ")
+                if len(parts) != 2 || parts[0] != "Bearer" {
+                        http.Error(w, "Invalid authorization format, expected 'Bearer <token>'", http.StatusUnauthorized)
+                        return
+                }
+
+                // In a token-based system, we would parse the token from
+                // Authorization header, verify and then use it to authenticate.
+                // For now, we'll just check if the user is already authenticated
+                // and has the required permission.
+                if !auth.IsAuthenticated() {
+                        http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
+                        return
+                }
+                
+                // Check permission
+                if err := auth.RequirePermission(permission); err != nil {
+                        http.Error(w, fmt.Sprintf("Unauthorized: %v", err), http.StatusUnauthorized)
+                        return
+                }
+
+                // Call the next handler
+                next(w, r)
+        }
+}
+
+// Handle authentication routes
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost {
+                http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+                return
+        }
+
+        var creds struct {
+                Username string `json:"username"`
+                Password string `json:"password"`
+        }
+
+        if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
+                http.Error(w, "Invalid request body", http.StatusBadRequest)
+                return
+        }
+
+        token, err := auth.Login(creds.Username, creds.Password, db.GetUserByUsername, db.UpdateLastLogin)
+        if err != nil {
+                http.Error(w, fmt.Sprintf("Authentication failed: %v", err), http.StatusUnauthorized)
+                return
+        }
+
+        // Create a token string response
+        tokenStr := fmt.Sprintf("%d:%s:%s", token.UserID, token.Username, token.Role)
+
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]string{"token": tokenStr})
+}
+
+// productHandler handles requests based on HTTP method and required permissions
+func productHandler(w http.ResponseWriter, r *http.Request) {
+        switch r.Method {
+        case http.MethodGet:
+                // View products requires inventory:view permission
+                if err := auth.RequirePermission("inventory:view"); err != nil {
+                        http.Error(w, fmt.Sprintf("Unauthorized: %v", err), http.StatusUnauthorized)
+                        return
+                }
+                handleGetProducts(w, r)
+        case http.MethodPost:
+                // Add products requires product:manage permission
+                if err := auth.RequirePermission("product:manage"); err != nil {
+                        http.Error(w, fmt.Sprintf("Unauthorized: %v", err), http.StatusUnauthorized)
+                        return
+                }
+                handleAddProduct(w, r)
+        default:
+                http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        }
+}
+
+// productByIDHandler handles requests based on HTTP method and required permissions
+func productByIDHandler(w http.ResponseWriter, r *http.Request) {
+        switch r.Method {
+        case http.MethodGet:
+                // View product requires inventory:view permission
+                if err := auth.RequirePermission("inventory:view"); err != nil {
+                        http.Error(w, fmt.Sprintf("Unauthorized: %v", err), http.StatusUnauthorized)
+                        return
+                }
+                handleGetProductByID(w, r)
+        case http.MethodPut:
+                // Update product requires product:manage permission
+                if err := auth.RequirePermission("product:manage"); err != nil {
+                        http.Error(w, fmt.Sprintf("Unauthorized: %v", err), http.StatusUnauthorized)
+                        return
+                }
+                handleUpdateProductStock(w, r)
+        default:
+                http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        }
+}
+
+// salesHandler handles requests based on HTTP method and required permissions
+func salesHandler(w http.ResponseWriter, r *http.Request) {
+        switch r.Method {
+        case http.MethodGet:
+                // View sales requires report:generate permission
+                if err := auth.RequirePermission("report:generate"); err != nil {
+                        http.Error(w, fmt.Sprintf("Unauthorized: %v", err), http.StatusUnauthorized)
+                        return
+                }
+                handleGetSales(w, r)
+        case http.MethodPost:
+                // Add sales requires sales:create permission
+                if err := auth.RequirePermission("sales:create"); err != nil {
+                        http.Error(w, fmt.Sprintf("Unauthorized: %v", err), http.StatusUnauthorized)
+                        return
+                }
+                handleAddSale(w, r)
+        default:
+                http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        }
+}
+
 func startAgentServer(port int) error {
-        // Set up HTTP routes
-        http.HandleFunc("/products", handleProducts)
-        http.HandleFunc("/products/", handleProductByID)
-        http.HandleFunc("/sales", handleSales)
-        http.HandleFunc("/reports/sales", handleSalesReport)
-        http.HandleFunc("/reports/inventory", handleInventoryReport)
-        http.HandleFunc("/reports/revenue", handleRevenueReport)
-        http.HandleFunc("/reports/summary", handleSummaryReport)
-        http.HandleFunc("/reports/top", handleTopProductsReport)
-        http.HandleFunc("/reports/daily", handleDailySalesReport)
+        // Authentication endpoints
+        http.HandleFunc("/auth/login", handleLogin)
+        
+        // Product, sales and inventory routes
+        http.HandleFunc("/products", productHandler)
+        http.HandleFunc("/products/", productByIDHandler)
+        http.HandleFunc("/sales", salesHandler)
+        
+        // Report routes - all require report:generate permission
+        http.HandleFunc("/reports/sales", authMiddleware(handleSalesReport, "report:generate"))
+        http.HandleFunc("/reports/inventory", authMiddleware(handleInventoryReport, "report:generate"))
+        http.HandleFunc("/reports/revenue", authMiddleware(handleRevenueReport, "report:generate"))
+        http.HandleFunc("/reports/summary", authMiddleware(handleSummaryReport, "report:generate"))
+        http.HandleFunc("/reports/top", authMiddleware(handleTopProductsReport, "report:generate"))
+        http.HandleFunc("/reports/daily", authMiddleware(handleDailySalesReport, "report:generate"))
 
         // Start the server
         addr := fmt.Sprintf("0.0.0.0:%d", port)
@@ -47,43 +187,39 @@ func startAgentServer(port int) error {
         return http.ListenAndServe(addr, nil)
 }
 
-func handleProducts(w http.ResponseWriter, r *http.Request) {
-        switch r.Method {
-        case http.MethodGet:
-                // List all products
-                products, err := handlers.GetAllProducts()
-                if err != nil {
-                        http.Error(w, fmt.Sprintf("Failed to get products: %v", err), http.StatusInternalServerError)
-                        return
-                }
-
-                w.Header().Set("Content-Type", "application/json")
-                json.NewEncoder(w).Encode(products)
-
-        case http.MethodPost:
-                // Add a new product
-                var product models.Product
-                if err := json.NewDecoder(r.Body).Decode(&product); err != nil {
-                        http.Error(w, "Invalid request body", http.StatusBadRequest)
-                        return
-                }
-
-                id, err := handlers.AddProduct(product)
-                if err != nil {
-                        http.Error(w, fmt.Sprintf("Failed to add product: %v", err), http.StatusInternalServerError)
-                        return
-                }
-
-                w.Header().Set("Content-Type", "application/json")
-                w.WriteHeader(http.StatusCreated)
-                json.NewEncoder(w).Encode(map[string]int{"id": id})
-
-        default:
-                http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+// handleGetProducts returns all products
+func handleGetProducts(w http.ResponseWriter, r *http.Request) {
+        products, err := handlers.GetAllProducts()
+        if err != nil {
+                http.Error(w, fmt.Sprintf("Failed to get products: %v", err), http.StatusInternalServerError)
+                return
         }
+
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(products)
 }
 
-func handleProductByID(w http.ResponseWriter, r *http.Request) {
+// handleAddProduct adds a new product
+func handleAddProduct(w http.ResponseWriter, r *http.Request) {
+        var product models.Product
+        if err := json.NewDecoder(r.Body).Decode(&product); err != nil {
+                http.Error(w, "Invalid request body", http.StatusBadRequest)
+                return
+        }
+
+        id, err := handlers.AddProduct(product)
+        if err != nil {
+                http.Error(w, fmt.Sprintf("Failed to add product: %v", err), http.StatusInternalServerError)
+                return
+        }
+
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusCreated)
+        json.NewEncoder(w).Encode(map[string]int{"id": id})
+}
+
+// handleGetProductByID returns a specific product by ID
+func handleGetProductByID(w http.ResponseWriter, r *http.Request) {
         // Extract product ID from the URL
         idStr := r.URL.Path[len("/products/"):]
         id, err := strconv.Atoi(idStr)
@@ -91,81 +227,78 @@ func handleProductByID(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "Invalid product ID", http.StatusBadRequest)
                 return
         }
-
-        switch r.Method {
-        case http.MethodGet:
-                // Get product by ID
-                product, err := handlers.GetProductByID(id)
-                if err != nil {
-                        http.Error(w, fmt.Sprintf("Failed to get product: %v", err), http.StatusInternalServerError)
-                        return
-                }
-
-                if product.ID == 0 {
-                        http.Error(w, "Product not found", http.StatusNotFound)
-                        return
-                }
-
-                w.Header().Set("Content-Type", "application/json")
-                json.NewEncoder(w).Encode(product)
-
-        case http.MethodPut:
-                // Update product stock
-                var data struct {
-                        Stock int `json:"stock"`
-                }
-                if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
-                        http.Error(w, "Invalid request body", http.StatusBadRequest)
-                        return
-                }
-
-                if err := handlers.UpdateProductStock(id, data.Stock); err != nil {
-                        http.Error(w, fmt.Sprintf("Failed to update stock: %v", err), http.StatusInternalServerError)
-                        return
-                }
-
-                w.WriteHeader(http.StatusOK)
-                json.NewEncoder(w).Encode(map[string]string{"status": "success"})
-
-        default:
-                http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        
+        product, err := handlers.GetProductByID(id)
+        if err != nil {
+                http.Error(w, fmt.Sprintf("Failed to get product: %v", err), http.StatusInternalServerError)
+                return
         }
+
+        if product.ID == 0 {
+                http.Error(w, "Product not found", http.StatusNotFound)
+                return
+        }
+
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(product)
 }
 
-func handleSales(w http.ResponseWriter, r *http.Request) {
-        switch r.Method {
-        case http.MethodGet:
-                // List all sales
-                sales, err := handlers.GetAllSales()
-                if err != nil {
-                        http.Error(w, fmt.Sprintf("Failed to get sales: %v", err), http.StatusInternalServerError)
-                        return
-                }
-
-                w.Header().Set("Content-Type", "application/json")
-                json.NewEncoder(w).Encode(sales)
-
-        case http.MethodPost:
-                // Record a new sale
-                var sale models.Sale
-                if err := json.NewDecoder(r.Body).Decode(&sale); err != nil {
-                        http.Error(w, "Invalid request body", http.StatusBadRequest)
-                        return
-                }
-
-                id, err := handlers.RecordSale(sale)
-                if err != nil {
-                        http.Error(w, fmt.Sprintf("Failed to record sale: %v", err), http.StatusInternalServerError)
-                        return
-                }
-
-                w.Header().Set("Content-Type", "application/json")
-                w.WriteHeader(http.StatusCreated)
-                json.NewEncoder(w).Encode(map[string]int{"id": id})
-
-        default:
-                http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+// handleUpdateProductStock updates the stock of a product
+func handleUpdateProductStock(w http.ResponseWriter, r *http.Request) {
+        // Extract product ID from the URL
+        idStr := r.URL.Path[len("/products/"):]
+        id, err := strconv.Atoi(idStr)
+        if err != nil {
+                http.Error(w, "Invalid product ID", http.StatusBadRequest)
+                return
         }
+        
+        var data struct {
+                Stock int `json:"stock"`
+        }
+        if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+                http.Error(w, "Invalid request body", http.StatusBadRequest)
+                return
+        }
+
+        if err := handlers.UpdateProductStock(id, data.Stock); err != nil {
+                http.Error(w, fmt.Sprintf("Failed to update stock: %v", err), http.StatusInternalServerError)
+                return
+        }
+
+        w.WriteHeader(http.StatusOK)
+        json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+// handleGetSales returns all sales records
+func handleGetSales(w http.ResponseWriter, r *http.Request) {
+        sales, err := handlers.GetAllSales()
+        if err != nil {
+                http.Error(w, fmt.Sprintf("Failed to get sales: %v", err), http.StatusInternalServerError)
+                return
+        }
+
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(sales)
+}
+
+// handleAddSale records a new sale
+func handleAddSale(w http.ResponseWriter, r *http.Request) {
+        var sale models.Sale
+        if err := json.NewDecoder(r.Body).Decode(&sale); err != nil {
+                http.Error(w, "Invalid request body", http.StatusBadRequest)
+                return
+        }
+
+        id, err := handlers.RecordSale(sale)
+        if err != nil {
+                http.Error(w, fmt.Sprintf("Failed to record sale: %v", err), http.StatusInternalServerError)
+                return
+        }
+
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusCreated)
+        json.NewEncoder(w).Encode(map[string]int{"id": id})
 }
 
 func handleSalesReport(w http.ResponseWriter, r *http.Request) {

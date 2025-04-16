@@ -10,6 +10,8 @@ import (
         "github.com/spf13/cobra"
 
         "termpos/internal/assistant"
+        "termpos/internal/auth"
+        "termpos/internal/db"
 )
 
 // initAssistantCommand sets up the AI assistant mode command
@@ -42,6 +44,39 @@ func startAssistantMode() error {
         scanner := bufio.NewScanner(os.Stdin)
         lastCommandTime := time.Now()
 
+        // Ask for login credentials if not already authenticated
+        if !auth.IsAuthenticated() {
+                fmt.Println("Please login to use the assistant mode:")
+                
+                var username, password string
+                
+                fmt.Print("Username: ")
+                if !scanner.Scan() {
+                        return fmt.Errorf("error reading username")
+                }
+                username = strings.TrimSpace(scanner.Text())
+                
+                fmt.Print("Password: ")
+                if !scanner.Scan() {
+                        return fmt.Errorf("error reading password")
+                }
+                password = strings.TrimSpace(scanner.Text())
+                
+                // Attempt login
+                _, err := auth.Login(username, password, db.GetUserByUsername, db.UpdateLastLogin)
+                if err != nil {
+                        fmt.Printf("Login failed: %v\n", err)
+                        return err
+                }
+                
+                fmt.Println("Login successful!")
+        }
+
+        // Display welcome message for logged-in user
+        user := auth.GetCurrentUser()
+        fmt.Printf("Welcome, %s (%s)!\n", user.Username, user.Role)
+
+        // Main input loop
         for {
                 fmt.Print("\n> ")
                 if !scanner.Scan() {
@@ -64,6 +99,12 @@ func startAssistantMode() error {
                         assistant.ClearContext()
                         fmt.Println("Conversation context has been reset.")
                         continue
+                }
+                
+                if input == "logout" {
+                        auth.Logout()
+                        fmt.Println("You have been logged out.")
+                        return nil
                 }
 
                 // Check for session timeout (context reset after 5 minutes of inactivity)

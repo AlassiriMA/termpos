@@ -8,6 +8,7 @@ import (
         "time"
 
         "github.com/sahilm/fuzzy"
+        "termpos/internal/auth"
         "termpos/internal/db"
         "termpos/internal/models"
 )
@@ -395,6 +396,11 @@ func generateResponse(intent Intent, entities map[string]Entity) (string, error)
 
 // handleAddProduct processes the add product intent
 func handleAddProduct(entities map[string]Entity) (string, error) {
+        // Check permissions - only admin and manager can add products
+        if err := auth.RequirePermission("product:manage"); err != nil {
+                return "", fmt.Errorf("you don't have permission to add products: %w", err)
+        }
+
         var productName string
         var productPrice float64
         var productQuantity int
@@ -445,6 +451,11 @@ func handleAddProduct(entities map[string]Entity) (string, error) {
 
 // handleSellProduct processes the sell product intent
 func handleSellProduct(entities map[string]Entity) (string, error) {
+        // Check permissions - anyone with sales:create can sell products
+        if err := auth.RequirePermission("sales:create"); err != nil {
+                return "", fmt.Errorf("you don't have permission to record sales: %w", err)
+        }
+        
         var productID int
         var productName string
         var quantity int = 1
@@ -515,6 +526,10 @@ func handleSellProduct(entities map[string]Entity) (string, error) {
 
 // handleGetInventory processes the get inventory intent
 func handleGetInventory() (string, error) {
+        // Check permissions - anyone with inventory:view can view inventory
+        if err := auth.RequirePermission("inventory:view"); err != nil {
+                return "", fmt.Errorf("you don't have permission to view inventory: %w", err)
+        }
         products, err := db.GetAllProducts()
         if err != nil {
                 return "", err
@@ -542,6 +557,10 @@ func handleGetInventory() (string, error) {
 
 // handleUpdateStock processes the update stock intent
 func handleUpdateStock(entities map[string]Entity) (string, error) {
+        // Check permissions - only admin and manager can update stock
+        if err := auth.RequirePermission("product:manage"); err != nil {
+                return "", fmt.Errorf("you don't have permission to update product stock: %w", err)
+        }
         var productID int
         var productName string
         var stock int
@@ -604,6 +623,10 @@ func handleUpdateStock(entities map[string]Entity) (string, error) {
 
 // handleGetReport processes the get report intent
 func handleGetReport(entities map[string]Entity) (string, error) {
+        // Check permissions - only admin and manager can generate reports
+        if err := auth.RequirePermission("report:generate"); err != nil {
+                return "", fmt.Errorf("you don't have permission to generate reports: %w", err)
+        }
         var reportType string
         
         // Extract report type
