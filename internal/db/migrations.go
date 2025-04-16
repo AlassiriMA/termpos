@@ -27,6 +27,8 @@ func RunMigrations() error {
                 {7, "create_product_batches_table", createProductBatchesTable},
                 {8, "create_product_locations_table", createProductLocationsTable},
                 {9, "alter_products_table", alterProductsTable},
+                {10, "alter_sales_table", alterSalesTable},
+                {11, "create_settings_table", createSettingsTable},
         }
 
         for _, m := range migrations {
@@ -106,8 +108,19 @@ func createSalesTable() error {
                 product_id INTEGER NOT NULL,
                 quantity INTEGER NOT NULL,
                 price_per_unit REAL NOT NULL,
+                discount_amount REAL DEFAULT 0.0,
+                discount_code TEXT,
+                tax_rate REAL DEFAULT 0.0,
+                tax_amount REAL DEFAULT 0.0,
+                subtotal REAL NOT NULL,
                 total REAL NOT NULL,
+                payment_method TEXT DEFAULT 'cash',
+                payment_reference TEXT,
                 sale_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                receipt_number TEXT,
+                customer_email TEXT,
+                customer_phone TEXT,
+                notes TEXT,
                 FOREIGN KEY (product_id) REFERENCES products (id)
         );`
 
@@ -268,4 +281,81 @@ func alterProductsTable() error {
                 }
         }
         return nil
+}
+
+// alterSalesTable adds new columns to the sales table for enhanced features
+func alterSalesTable() error {
+        // SQLite doesn't support adding multiple columns in a single ALTER TABLE statement
+        // so we need to execute multiple statements
+        queries := []string{
+                "ALTER TABLE sales ADD COLUMN discount_amount REAL DEFAULT 0.0;",
+                "ALTER TABLE sales ADD COLUMN discount_code TEXT;",
+                "ALTER TABLE sales ADD COLUMN tax_rate REAL DEFAULT 0.0;",
+                "ALTER TABLE sales ADD COLUMN tax_amount REAL DEFAULT 0.0;",
+                "ALTER TABLE sales ADD COLUMN subtotal REAL;",
+                "ALTER TABLE sales ADD COLUMN payment_method TEXT DEFAULT 'cash';",
+                "ALTER TABLE sales ADD COLUMN payment_reference TEXT;",
+                "ALTER TABLE sales ADD COLUMN receipt_number TEXT;",
+                "ALTER TABLE sales ADD COLUMN customer_email TEXT;",
+                "ALTER TABLE sales ADD COLUMN customer_phone TEXT;",
+                "ALTER TABLE sales ADD COLUMN notes TEXT;",
+        }
+        
+        for _, query := range queries {
+                if _, err := DB.Exec(query); err != nil {
+                        // If column already exists, continue with the next column
+                        if err.Error() == "duplicate column name: discount_amount" || 
+                           err.Error() == "duplicate column name: discount_code" ||
+                           err.Error() == "duplicate column name: tax_rate" ||
+                           err.Error() == "duplicate column name: tax_amount" ||
+                           err.Error() == "duplicate column name: subtotal" ||
+                           err.Error() == "duplicate column name: payment_method" ||
+                           err.Error() == "duplicate column name: payment_reference" ||
+                           err.Error() == "duplicate column name: receipt_number" ||
+                           err.Error() == "duplicate column name: customer_email" ||
+                           err.Error() == "duplicate column name: customer_phone" ||
+                           err.Error() == "duplicate column name: notes" {
+                                continue
+                        }
+                        return err
+                }
+        }
+        
+        // Update existing sales records to set subtotal equal to total if it's NULL
+        _, err := DB.Exec("UPDATE sales SET subtotal = total WHERE subtotal IS NULL")
+        if err != nil {
+                return err
+        }
+        
+        return nil
+}
+
+// createSettingsTable creates the settings table for POS configuration
+func createSettingsTable() error {
+        query := `
+        CREATE TABLE settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                settings_json TEXT NOT NULL,
+                last_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_updated_by TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Create initial settings with default values
+        INSERT INTO settings (settings_json, last_updated, last_updated_by) 
+        VALUES (
+                '{"store":{"name":"My Store","receipt_footer":"Thank you for your purchase!"},
+                "tax":{"default_tax_rate":8.0,"tax_inclusive":false},
+                "product":{"default_category_id":1,"default_supplier_id":1,"low_stock_threshold":5},
+                "payment":{"enabled_payment_methods":["cash","card","mobile"],"default_payment_method":"cash"},
+                "receipt":{"receipt_number_prefix":"RCP-","print_receipt_by_default":false,"email_receipt_by_default":false,"show_tax_details":true,"show_discount_details":true,"show_payment_details":true},
+                "backup":{"auto_backup_enabled":false,"backup_interval_hours":24,"backup_path":"./backups","keep_backup_count":7},
+                "system":{"language":"en","currency":"USD","currency_symbol":"$","date_format":"2006-01-02","time_format":"15:04:05","default_operating_mode":"classic"}}',
+                CURRENT_TIMESTAMP,
+                'system'
+        );
+        `
+
+        _, err := DB.Exec(query)
+        return err
 }

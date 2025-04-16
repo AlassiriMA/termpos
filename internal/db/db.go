@@ -3,8 +3,10 @@ package db
 import (
         "database/sql"
         "fmt"
+        "io"
         "os"
         "path/filepath"
+        "sort"
         "termpos/internal/models"
         "time"
 
@@ -66,6 +68,122 @@ func Close() error {
                 return DB.Close()
         }
         return nil
+}
+
+// BackupDatabase creates a backup of the database to the specified directory
+func BackupDatabase(backupDir string) error {
+        // Use default backup location if not specified
+        if backupDir == "" {
+                backupDir = "./backups"
+        }
+
+        // Ensure the backup directory exists
+        if err := os.MkdirAll(backupDir, 0755); err != nil {
+                return fmt.Errorf("failed to create backup directory: %w", err)
+        }
+
+        // Create a timestamp-based backup filename
+        timestamp := time.Now().Format("20060102_150405")
+        backupPath := filepath.Join(backupDir, fmt.Sprintf("pos_backup_%s.db", timestamp))
+
+        // Get the current database path
+        // For SQLite, we need to open the file directly and copy it
+        srcFile, err := os.Open(GetDatabasePath())
+        if err != nil {
+                return fmt.Errorf("failed to open source database file: %w", err)
+        }
+        defer srcFile.Close()
+
+        // Create the destination file
+        dstFile, err := os.Create(backupPath)
+        if err != nil {
+                return fmt.Errorf("failed to create backup file: %w", err)
+        }
+        defer dstFile.Close()
+
+        // Copy the file
+        if _, err := io.Copy(dstFile, srcFile); err != nil {
+                return fmt.Errorf("failed to copy database: %w", err)
+        }
+
+        // Save backup information in settings
+        settings, err := GetSettings()
+        if err == nil { // Only update if we can get settings
+                settings.Backup.LastBackupTime = time.Now().Format(time.RFC3339)
+                // Use admin as the updater since this is a system operation
+                if err := SaveSettings(settings, "system"); err != nil {
+                        fmt.Printf("Warning: Could not update backup timestamp: %v\n", err)
+                        // Non-fatal, continue anyway
+                }
+        }
+
+        fmt.Printf("Backup created successfully at %s\n", backupPath)
+        return nil
+}
+
+// CleanupBackups removes old backups keeping only the most recent ones
+func CleanupBackups(backupDir string, keepCount int) error {
+        if keepCount <= 0 {
+                keepCount = 7 // Default to keeping 7 backups
+        }
+
+        // Use default backup location if not specified
+        if backupDir == "" {
+                backupDir = "./backups"
+        }
+
+        // List backup files
+        files, err := filepath.Glob(filepath.Join(backupDir, "pos_backup_*.db"))
+        if err != nil {
+                return fmt.Errorf("failed to list backup files: %w", err)
+        }
+
+        // If we have fewer files than we want to keep, return
+        if len(files) <= keepCount {
+                return nil
+        }
+
+        // Get file info for sorting
+        type fileInfo struct {
+                path    string
+                modTime time.Time
+        }
+
+        fileInfos := make([]fileInfo, 0, len(files))
+        for _, file := range files {
+                info, err := os.Stat(file)
+                if err != nil {
+                        continue // Skip files we can't stat
+                }
+                fileInfos = append(fileInfos, fileInfo{
+                        path:    file,
+                        modTime: info.ModTime(),
+                })
+        }
+
+        // Sort by modification time (newest first)
+        sort.Slice(fileInfos, func(i, j int) bool {
+                return fileInfos[i].modTime.After(fileInfos[j].modTime)
+        })
+
+        // Delete older files beyond the keep count
+        for i := keepCount; i < len(fileInfos); i++ {
+                file := fileInfos[i].path
+                if err := os.Remove(file); err != nil {
+                        fmt.Printf("Warning: Could not remove old backup %s: %v\n", file, err)
+                        continue // Try to remove others
+                }
+                fmt.Printf("Removed old backup: %s\n", filepath.Base(file))
+        }
+
+        return nil
+}
+
+// GetDatabasePath returns the current database file path
+func GetDatabasePath() string {
+        // Return the path to the database file 
+        // For now, we use a hardcoded default
+        return "./pos.db"
 }
 
 // UpdateProductStock updates the stock of a product

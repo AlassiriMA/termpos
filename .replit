@@ -23,6 +23,34 @@ args = "pos_classic_mode"
 task = "workflow.run"
 args = "Login Test"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Receipt Demo"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Setup Products"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Detailed Sales Report"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Full Receipt Demo"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Mobile Payment Demo"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Final Report"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Backup Test"
+
 [[workflows.workflow]]
 name = "Terminal POS"
 author = "agent"
@@ -49,7 +77,7 @@ task = "packager.installForAll"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "go run ./cmd/pos add \"Coffee\" 3.50 10 && go run ./cmd/pos inventory && go run ./cmd/pos sell 1 2"
+args = "go run ./cmd/pos sell 1 1 --discount 0.5 --print-receipt"
 
 [[workflows.workflow]]
 name = "Login Test"
@@ -64,6 +92,104 @@ task = "packager.installForAll"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "go run ./cmd/pos login admin password123"
+
+[[workflows.workflow]]
+name = "Receipt Demo"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run ./cmd/pos sell 1 2 --discount 0.5 --discount-code \"SUMMER10\" --payment-method \"card\" --payment-ref \"TX123456\" --email \"customer@example.com\" --print-receipt --tax-rate 8.5"
+
+[[workflows.workflow]]
+name = "Setup Products"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run ./cmd/pos add \"Coffee\" 3.50 10 && go run ./cmd/pos add \"Tea\" 2.75 15 && go run ./cmd/pos add \"Muffin\" 2.25 8 && go run ./cmd/pos inventory"
+
+[[workflows.workflow]]
+name = "Detailed Sales Report"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run ./cmd/pos report sales --detailed"
+
+[[workflows.workflow]]
+name = "Full Receipt Demo"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run ./cmd/pos report sales --detailed --receipts"
+
+[[workflows.workflow]]
+name = "Mobile Payment Demo"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run ./cmd/pos sell 4 3 --payment-method \"mobile\" --payment-ref \"MPESA123456\" --phone \"555-123-4567\" --notes \"Customer wants gluten-free next time\" --print-receipt --tax-rate 10.0"
+
+[[workflows.workflow]]
+name = "Final Report"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run ./cmd/pos report sales --detailed && go run ./cmd/pos report summary"
+
+[[workflows.workflow]]
+name = "Backup Test"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run ./cmd/pos workflow backup run"
 
 [deployment]
 run = ["sh", "-c", "go run ./cmd/pos"]

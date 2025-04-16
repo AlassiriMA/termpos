@@ -18,6 +18,13 @@ var (
         ErrInsufficientPerms  = errors.New("insufficient permissions for this operation")
 )
 
+// Permission constants for workflow-related operations
+const (
+        PermissionConfigureWorkflows = "setting:workflow:configure"
+        PermissionRunBackups         = "setting:backup:run"
+        PermissionGenerateReports    = "report:generate"
+)
+
 // Session represents an authenticated user session
 type Session struct {
         UserID       int
@@ -171,9 +178,49 @@ func RequirePermission(permission string) error {
                 Role:     CurrentSession.Role,
         }
 
-        if !user.HasPermission(permission) {
+        if !HasPermission(&user, permission) {
                 return ErrInsufficientPerms
         }
 
         return nil
+}
+
+// HasPermission checks if a user has a specific permission
+func HasPermission(user *models.User, permission string) bool {
+        if user == nil {
+                return false
+        }
+
+        // For simplicity, role-based checking
+        // Admin has all permissions
+        if user.Role == "admin" {
+                return true
+        }
+
+        // Manager permissions
+        if user.Role == "manager" {
+                switch permission {
+                case "setting:read", "setting:backup", "setting:export",
+                        "product:read", "product:create", "product:update",
+                        "sale:create", "user:read", "role:read",
+                        // New workflow permissions
+                        PermissionConfigureWorkflows, PermissionRunBackups, 
+                        PermissionGenerateReports:
+                        return true
+                default:
+                        return false
+                }
+        }
+
+        // Cashier permissions
+        if user.Role == "cashier" {
+                switch permission {
+                case "product:read", "sale:create":
+                        return true
+                default:
+                        return false
+                }
+        }
+
+        return false
 }
