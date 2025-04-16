@@ -44,9 +44,14 @@ func initClassicCommands() {
                         }
 
                         product := models.Product{
-                                Name:  name,
-                                Price: price,
-                                Stock: stock,
+                                Name:              name,
+                                Price:             price,
+                                Stock:             stock,
+                                CategoryID:        productCategory,
+                                DefaultSupplierID: productSupplier,
+                                LowStockAlert:     productLowStock,
+                                SKU:               productSKU,
+                                Description:       productDescription,
                         }
 
                         id, err := handlers.AddProduct(product)
@@ -78,21 +83,57 @@ func initClassicCommands() {
                                 return nil
                         }
 
-                        // Create a table for output
-                        table := tablewriter.NewWriter(cmd.OutOrStdout())
-                        table.SetHeader([]string{"ID", "Name", "Price", "Stock"})
-                        table.SetBorder(false)
+                        // Create a table for output - use detailed view with advanced inventory fields
+                        detailedProducts, err := db.GetAllProductsWithDetails()
+                        if err == nil && len(detailedProducts) > 0 {
+                                // If we have detailed products, show enhanced view
+                                table := tablewriter.NewWriter(cmd.OutOrStdout())
+                                table.SetHeader([]string{"ID", "Name", "Price", "Stock", "Category", "Low Stock", "Status"})
+                                table.SetBorder(false)
 
-                        for _, p := range products {
-                                table.Append([]string{
-                                        fmt.Sprintf("%d", p.ID),
-                                        p.Name,
-                                        fmt.Sprintf("$%.2f", p.Price),
-                                        fmt.Sprintf("%d", p.Stock),
-                                })
+                                for _, p := range detailedProducts {
+                                        // Format low stock status
+                                        lowStockStatus := "-"
+                                        status := "OK"
+                                        
+                                        if p.LowStockAlert > 0 {
+                                                lowStockStatus = fmt.Sprintf("%d", p.LowStockAlert)
+                                                if p.IsLowStock {
+                                                        status = "LOW STOCK"
+                                                }
+                                        }
+                                        
+                                        if p.HasExpiredBatches {
+                                                status = "EXPIRED BATCHES"
+                                        }
+
+                                        table.Append([]string{
+                                                fmt.Sprintf("%d", p.ID),
+                                                p.Name,
+                                                fmt.Sprintf("$%.2f", p.Price),
+                                                fmt.Sprintf("%d", p.Stock),
+                                                p.CategoryName,
+                                                lowStockStatus,
+                                                status,
+                                        })
+                                }
+                                table.Render()
+                        } else {
+                                // Fall back to basic view
+                                table := tablewriter.NewWriter(cmd.OutOrStdout())
+                                table.SetHeader([]string{"ID", "Name", "Price", "Stock"})
+                                table.SetBorder(false)
+
+                                for _, p := range products {
+                                        table.Append([]string{
+                                                fmt.Sprintf("%d", p.ID),
+                                                p.Name,
+                                                fmt.Sprintf("$%.2f", p.Price),
+                                                fmt.Sprintf("%d", p.Stock),
+                                        })
+                                }
+                                table.Render()
                         }
-
-                        table.Render()
                         return nil
                 },
         }
@@ -236,6 +277,72 @@ func generateSalesReport(cmd *cobra.Command) error {
 }
 
 func generateInventoryReport(cmd *cobra.Command) error {
+        // Try to get enhanced product details
+        detailedProducts, err := db.GetAllProductsWithDetails()
+        if err == nil && len(detailedProducts) > 0 {
+                if len(detailedProducts) == 0 {
+                        fmt.Println("No products found in inventory")
+                        return nil
+                }
+
+                // Enhanced inventory report with category and supplier information
+                table := tablewriter.NewWriter(cmd.OutOrStdout())
+                table.SetHeader([]string{"ID", "Name", "Category", "Price", "Stock", "Value", "Supplier", "Status"})
+                table.SetBorder(false)
+
+                var totalValue float64
+                for _, p := range detailedProducts {
+                        value := p.Price * float64(p.Stock)
+                        totalValue += value
+                        
+                        // Format status
+                        status := "OK"
+                        if p.IsLowStock {
+                                status = "LOW STOCK"
+                        }
+                        if p.HasExpiredBatches {
+                                status = "EXPIRED BATCHES"
+                        }
+
+                        table.Append([]string{
+                                fmt.Sprintf("%d", p.ID),
+                                p.Name,
+                                p.CategoryName,
+                                fmt.Sprintf("$%.2f", p.Price),
+                                fmt.Sprintf("%d", p.Stock),
+                                fmt.Sprintf("$%.2f", value),
+                                p.SupplierName,
+                                status,
+                        })
+                }
+                
+                fmt.Println("Enhanced Inventory Report:")
+                table.Render()
+                fmt.Printf("Total Inventory Value: $%.2f\n", totalValue)
+                
+                // Show inventory stats
+                var lowStockCount, withBatchesCount, expiredBatchesCount int
+                for _, p := range detailedProducts {
+                        if p.IsLowStock {
+                                lowStockCount++
+                        }
+                        if p.BatchCount > 0 {
+                                withBatchesCount++
+                        }
+                        if p.HasExpiredBatches {
+                                expiredBatchesCount++
+                        }
+                }
+                
+                fmt.Println("\nInventory Statistics:")
+                fmt.Printf("Products with Low Stock: %d\n", lowStockCount)
+                fmt.Printf("Products with Batches: %d\n", withBatchesCount)
+                fmt.Printf("Products with Expired Batches: %d\n", expiredBatchesCount)
+                
+                return nil
+        }
+        
+        // Fall back to basic inventory report if detailed view is not available
         products, err := handlers.GetAllProducts()
         if err != nil {
                 return fmt.Errorf("failed to get inventory data: %w", err)

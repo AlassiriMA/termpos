@@ -21,6 +21,12 @@ func RunMigrations() error {
                 {1, "create_products_table", createProductsTable},
                 {2, "create_sales_table", createSalesTable},
                 {3, "create_users_table", createUsersTable},
+                {4, "create_categories_table", createCategoriesTable},
+                {5, "create_suppliers_table", createSuppliersTable},
+                {6, "create_locations_table", createLocationsTable},
+                {7, "create_product_batches_table", createProductBatchesTable},
+                {8, "create_product_locations_table", createProductLocationsTable},
+                {9, "alter_products_table", alterProductsTable},
         }
 
         for _, m := range migrations {
@@ -122,11 +128,144 @@ func createUsersTable() error {
                 active BOOLEAN NOT NULL DEFAULT 1
         );
         
-        -- Create default admin user with password 'admin'
+        -- Create default admin user with password 'password123'
         INSERT INTO users (username, password_hash, role) 
-        VALUES ('admin', '$2a$10$bSiP4XjAP5tTRLKL8qx8KOtVVBIPwpnWbpF0Yyn8HndjP6GPE5zb6', 'admin');
+        VALUES ('admin', '$2a$10$uArvRu7.jI3g.FbbkoYtLu1lmrWui9iAf1ivC6wQiEK95/t3wXaRu', 'admin');
         `
 
         _, err := DB.Exec(query)
         return err
+}
+
+// createCategoriesTable creates the categories table
+func createCategoriesTable() error {
+        query := `
+        CREATE TABLE categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT,
+                parent_id INTEGER,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (parent_id) REFERENCES categories (id)
+        );
+
+        -- Create a default 'Uncategorized' category
+        INSERT INTO categories (name, description) 
+        VALUES ('Uncategorized', 'Default category for products');
+        `
+
+        _, err := DB.Exec(query)
+        return err
+}
+
+// createSuppliersTable creates the suppliers table
+func createSuppliersTable() error {
+        query := `
+        CREATE TABLE suppliers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                contact TEXT,
+                email TEXT,
+                phone TEXT,
+                address TEXT,
+                notes TEXT,
+                is_active BOOLEAN NOT NULL DEFAULT 1,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Create a default supplier
+        INSERT INTO suppliers (name, notes) 
+        VALUES ('Default Supplier', 'Default supplier for products');
+        `
+
+        _, err := DB.Exec(query)
+        return err
+}
+
+// createLocationsTable creates the locations table
+func createLocationsTable() error {
+        query := `
+        CREATE TABLE locations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                address TEXT,
+                description TEXT,
+                is_active BOOLEAN NOT NULL DEFAULT 1,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Create a default location
+        INSERT INTO locations (name, description) 
+        VALUES ('Main Warehouse', 'Default warehouse location');
+        `
+
+        _, err := DB.Exec(query)
+        return err
+}
+
+// createProductBatchesTable creates the product_batches table
+func createProductBatchesTable() error {
+        query := `
+        CREATE TABLE product_batches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id INTEGER NOT NULL,
+                location_id INTEGER NOT NULL,
+                supplier_id INTEGER NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 0,
+                batch_number TEXT,
+                expiry_date TIMESTAMP,
+                manufacture_date TIMESTAMP,
+                cost_price REAL NOT NULL DEFAULT 0,
+                receipt_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (product_id) REFERENCES products (id),
+                FOREIGN KEY (location_id) REFERENCES locations (id),
+                FOREIGN KEY (supplier_id) REFERENCES suppliers (id)
+        );`
+
+        _, err := DB.Exec(query)
+        return err
+}
+
+// createProductLocationsTable creates the product_locations table
+func createProductLocationsTable() error {
+        query := `
+        CREATE TABLE product_locations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id INTEGER NOT NULL,
+                location_id INTEGER NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (product_id) REFERENCES products (id),
+                FOREIGN KEY (location_id) REFERENCES locations (id),
+                UNIQUE(product_id, location_id)
+        );`
+
+        _, err := DB.Exec(query)
+        return err
+}
+
+// alterProductsTable adds new columns to the products table
+func alterProductsTable() error {
+        // SQLite doesn't support adding multiple columns in a single ALTER TABLE statement
+        // so we need to execute multiple statements
+        queries := []string{
+                "ALTER TABLE products ADD COLUMN category_id INTEGER DEFAULT 1 REFERENCES categories(id);",
+                "ALTER TABLE products ADD COLUMN low_stock_alert INTEGER DEFAULT 0;",
+                "ALTER TABLE products ADD COLUMN default_supplier_id INTEGER DEFAULT 1 REFERENCES suppliers(id);",
+                "ALTER TABLE products ADD COLUMN sku TEXT;",
+                "ALTER TABLE products ADD COLUMN description TEXT;",
+        }
+
+        for _, query := range queries {
+                if _, err := DB.Exec(query); err != nil {
+                        return err
+                }
+        }
+        return nil
 }

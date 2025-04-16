@@ -19,6 +19,10 @@ args = "Terminal POS"
 task = "workflow.run"
 args = "pos_classic_mode"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Login Test"
+
 [[workflows.workflow]]
 name = "Terminal POS"
 author = "agent"
@@ -46,6 +50,20 @@ task = "packager.installForAll"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "go run ./cmd/pos add \"Coffee\" 3.50 10 && go run ./cmd/pos inventory && go run ./cmd/pos sell 1 2"
+
+[[workflows.workflow]]
+name = "Login Test"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run ./cmd/pos login admin password123"
 
 [deployment]
 run = ["sh", "-c", "go run ./cmd/pos"]

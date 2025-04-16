@@ -8,6 +8,7 @@ import (
         "github.com/spf13/cobra"
         "gopkg.in/yaml.v2"
 
+        "termpos/internal/auth"
         "termpos/internal/db"
 )
 
@@ -29,6 +30,13 @@ var (
                         if err := db.Initialize(dbPath); err != nil {
                                 return fmt.Errorf("failed to initialize database: %w", err)
                         }
+                        
+                        // Try to load session if it exists
+                        if err := auth.LoadSession(); err != nil {
+                                fmt.Printf("Warning: Failed to load session: %v\n", err)
+                                // Non-fatal error, continue without a session
+                        }
+                        
                         return nil
                 },
         }

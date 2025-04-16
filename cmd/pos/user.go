@@ -14,10 +14,11 @@ import (
 
 var (
         loginCmd = &cobra.Command{
-                Use:   "login",
+                Use:   "login [username] [password]",
                 Short: "Log in to the system",
                 Long:  "Authenticate with username and password to access the system",
                 RunE:  runLogin,
+                Args:  cobra.MaximumNArgs(2),
         }
 
         logoutCmd = &cobra.Command{
@@ -109,23 +110,31 @@ func runLogin(cmd *cobra.Command, args []string) error {
                 return nil
         }
 
-        reader := bufio.NewReader(os.Stdin)
+        // For testing/development, allow command-line arguments for username and password
+        var username, password string
+        if len(args) >= 2 {
+                username = args[0]
+                password = args[1]
+        } else {
+                reader := bufio.NewReader(os.Stdin)
 
-        // Get username
-        fmt.Print("Username: ")
-        username, err := reader.ReadString('\n')
-        if err != nil {
-                return fmt.Errorf("failed to read username: %w", err)
-        }
-        username = strings.TrimSpace(username)
+                // Get username
+                fmt.Print("Username: ")
+                var err error
+                username, err = reader.ReadString('\n')
+                if err != nil {
+                        return fmt.Errorf("failed to read username: %w", err)
+                }
+                username = strings.TrimSpace(username)
 
-        // Get password
-        fmt.Print("Password: ")
-        password, err := reader.ReadString('\n')
-        if err != nil {
-                return fmt.Errorf("failed to read password: %w", err)
+                // Get password
+                fmt.Print("Password: ")
+                password, err = reader.ReadString('\n')
+                if err != nil {
+                        return fmt.Errorf("failed to read password: %w", err)
+                }
+                password = strings.TrimSpace(password)
         }
-        password = strings.TrimSpace(password)
 
         // Authenticate
         session, err := auth.Login(username, password, db.GetUserByUsername, db.UpdateLastLogin)
