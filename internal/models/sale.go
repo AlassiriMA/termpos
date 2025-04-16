@@ -36,6 +36,16 @@ type Sale struct {
         CustomerEmail   string    `json:"customer_email,omitempty"`
         CustomerPhone   string    `json:"customer_phone,omitempty"`
         Notes           string    `json:"notes,omitempty"`
+        
+        // Customer loyalty fields
+        CustomerID      int       `json:"customer_id,omitempty"`
+        CustomerName    string    `json:"customer_name,omitempty"`
+        LoyaltyDiscount float64   `json:"loyalty_discount,omitempty"`
+        PointsEarned    int       `json:"points_earned,omitempty"`
+        PointsUsed      int       `json:"points_used,omitempty"`
+        LoyaltyTier     string    `json:"loyalty_tier,omitempty"`
+        RewardID        int       `json:"reward_id,omitempty"`
+        RewardName      string    `json:"reward_name,omitempty"`
 }
 
 // Validate checks if the sale data is valid

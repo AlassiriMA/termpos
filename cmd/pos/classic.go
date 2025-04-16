@@ -202,6 +202,19 @@ func initClassicCommands() {
                         printReceipt, _ := cmd.Flags().GetBool("print-receipt")
                         emailReceipt, _ := cmd.Flags().GetBool("email-receipt")
                         
+                        // Get customer loyalty flags
+                        customerID, _ := cmd.Flags().GetInt("customer-id")
+                        applyLoyalty, _ := cmd.Flags().GetBool("apply-loyalty")
+                        pointsUsed, _ := cmd.Flags().GetInt("points-used")
+                        rewardID, _ := cmd.Flags().GetInt("reward-id")
+                        
+                        // If we want to disable loyalty features for this transaction
+                        if !applyLoyalty {
+                                customerID = 0
+                                pointsUsed = 0
+                                rewardID = 0
+                        }
+                        
                         // Convert tax rate from percentage to decimal if provided
                         if taxRate > 0 {
                                 taxRate = taxRate / 100.0
@@ -218,6 +231,9 @@ func initClassicCommands() {
                                 CustomerEmail:     customerEmail,
                                 CustomerPhone:     customerPhone,
                                 Notes:             notes,
+                                CustomerID:        customerID,
+                                PointsUsed:        pointsUsed,
+                                RewardID:          rewardID,
                         }
 
                         id, err := handlers.RecordSale(sale)
@@ -298,6 +314,12 @@ func initClassicCommands() {
         sellCmd.Flags().String("notes", "", "Additional notes for the sale")
         sellCmd.Flags().Bool("print-receipt", false, "Print receipt after sale")
         sellCmd.Flags().Bool("email-receipt", false, "Email receipt to customer")
+        
+        // Add customer loyalty related flags
+        sellCmd.Flags().Int("customer-id", 0, "Customer ID for loyalty program")
+        sellCmd.Flags().Bool("apply-loyalty", true, "Apply loyalty discount if eligible")
+        sellCmd.Flags().Int("points-used", 0, "Loyalty points to apply to this purchase")
+        sellCmd.Flags().Int("reward-id", 0, "Loyalty reward ID to redeem with this purchase")
         
         // Add report-related flags to the report command
         reportCmd.Flags().Bool("detailed", false, "Show detailed report with discount and tax information")

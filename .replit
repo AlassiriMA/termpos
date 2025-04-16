@@ -1,4 +1,4 @@
-modules = ["go"]
+modules = ["go", "postgresql-16"]
 
 [nix]
 channel = "stable-24_05"
@@ -62,6 +62,10 @@ args = "Security Enhanced Backup"
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "Sensitive Data Test"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Loyalty Customer Test"
 
 [[workflows.workflow]]
 name = "Terminal POS"
@@ -244,6 +248,20 @@ task = "packager.installForAll"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "go run ./cmd/pos sensitive is-sensitive \"api_key\" && go run ./cmd/pos sensitive is-sensitive \"customer_name\""
+
+[[workflows.workflow]]
+name = "Loyalty Customer Test"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go run ./cmd/pos sell 1 2 --customer-id 1 --print-receipt"
 
 [deployment]
 run = ["sh", "-c", "go run ./cmd/pos"]

@@ -10,7 +10,7 @@ import (
         "termpos/internal/models"
 )
 
-// RecordSale records a new sale with optional discount, tax, and payment information
+// RecordSale records a new sale with optional discount, tax, payment, and customer loyalty information
 func RecordSale(sale models.Sale) (int, error) {
         // Validate the sale
         if err := sale.Validate(); err != nil {
@@ -44,6 +44,47 @@ func RecordSale(sale models.Sale) (int, error) {
                 
                 // Calculate subtotal
                 subtotal := product.Price * float64(sale.Quantity)
+                
+                // Look up customer if ID, phone, or email provided
+                var customer models.Customer
+                var customerFound bool
+                
+                if sale.CustomerID > 0 {
+                        // Lookup customer by ID
+                        customer, err = db.GetCustomer(sale.CustomerID)
+                        if err == nil {
+                                customerFound = true
+                        }
+                } else if sale.CustomerPhone != "" {
+                        // Lookup customer by phone
+                        customer, err = db.GetCustomerByPhone(sale.CustomerPhone)
+                        if err == nil {
+                                customerFound = true
+                                sale.CustomerID = customer.ID
+                        }
+                } else if sale.CustomerEmail != "" {
+                        // Lookup customer by email
+                        customer, err = db.GetCustomerByEmail(sale.CustomerEmail)
+                        if err == nil {
+                                customerFound = true
+                                sale.CustomerID = customer.ID
+                        }
+                }
+                
+                // If customer found, apply loyalty tier discount or reward
+                if customerFound {
+                        sale.CustomerName = customer.Name
+                        sale.LoyaltyTier = customer.LoyaltyTier
+                        
+                        // Calculate loyalty discount based on tier
+                        if sale.LoyaltyDiscount <= 0 {
+                                // Check for loyalty tier discount
+                                loyaltyDiscount, err := db.CalculateLoyaltyDiscount(customer.ID, subtotal)
+                                if err == nil && loyaltyDiscount > 0 {
+                                        sale.LoyaltyDiscount = loyaltyDiscount
+                                }
+                        }
+                }
                 
                 // Apply discount if specified
                 if sale.DiscountAmount <= 0 && sale.DiscountCode != "" {
@@ -102,6 +143,49 @@ func RecordSale(sale models.Sale) (int, error) {
                         return err
                 }
 
+                // Link sale to customer if CustomerID is provided
+                if sale.CustomerID > 0 {
+                        // Get customer details to determine tier and multiplier
+                        customer, err := db.GetCustomer(sale.CustomerID)
+                        if err != nil {
+                                // If customer not found, continue without loyalty features
+                                fmt.Printf("Warning: Customer ID %d not found: %v\n", sale.CustomerID, err)
+                        } else {
+                                // Set customer tier for calculations
+                                sale.LoyaltyTier = customer.LoyaltyTier
+                                sale.CustomerName = customer.Name
+                                
+                                // Apply loyalty discount if not already manually applied
+                                if sale.LoyaltyDiscount == 0 && sale.DiscountAmount == 0 {
+                                        tierDiscount := models.GetLoyaltyTierDiscount(customer.LoyaltyTier)
+                                        if tierDiscount > 0 {
+                                                sale.LoyaltyDiscount = subtotal * tierDiscount
+                                                // Update total price with loyalty discount
+                                                total -= sale.LoyaltyDiscount
+                                        }
+                                }
+                        }
+                        
+                        // Calculate points to be earned for this purchase
+                        var pointsEarned int
+                        
+                        // Try to get customer tier for points calculation
+                        if sale.LoyaltyTier != "" {
+                                // Calculate based on tier multiplier
+                                multiplier := models.GetLoyaltyTierMultiplier(sale.LoyaltyTier)
+                                pointsEarned = models.CalculatePointsForPurchase(subtotal-sale.DiscountAmount-sale.LoyaltyDiscount, multiplier)
+                        } else {
+                                // Use default multiplier
+                                pointsEarned = models.CalculatePointsForPurchase(subtotal-sale.DiscountAmount-sale.LoyaltyDiscount, 1.0)
+                        }
+                        
+                        // Link the sale to the customer and update their loyalty points
+                        err = db.LinkSaleToCustomer(int(id), sale.CustomerID, pointsEarned, sale.PointsUsed, sale.RewardID)
+                        if err != nil {
+                                return fmt.Errorf("failed to link sale to customer: %w", err)
+                        }
+                }
+
                 // Update the product stock
                 return DecrementProductStock(tx, sale.ProductID, sale.Quantity)
         })
@@ -153,7 +237,43 @@ func GenerateReceipt(saleID int) (string, error) {
         `
         
         var sale models.Sale
-        var discountCode, paymentRef, receiptNum, custEmail, custPhone sql.NullString
+        var discountCode, paymentRef, receiptNum, custEmail, custPhone, 
+            customerName, loyaltyTier, rewardName sql.NullString
+        var customerID, pointsEarned, pointsUsed, rewardID sql.NullInt64 
+        var loyaltyDiscount sql.NullFloat64
+        
+        // Enhanced query to include loyalty-related fields
+        query = `
+                SELECT 
+                        s.id, 
+                        s.product_id, 
+                        p.name, 
+                        s.quantity, 
+                        s.price_per_unit, 
+                        s.discount_amount,
+                        s.discount_code,
+                        s.tax_rate,
+                        s.tax_amount,
+                        s.subtotal,
+                        s.total, 
+                        s.payment_method,
+                        s.payment_reference,
+                        s.receipt_number,
+                        s.customer_email,
+                        s.customer_phone,
+                        s.sale_date,
+                        s.customer_id,
+                        s.customer_name,
+                        s.loyalty_discount,
+                        s.points_earned,
+                        s.points_used,
+                        s.loyalty_tier,
+                        s.reward_id,
+                        s.reward_name
+                FROM sales s
+                JOIN products p ON s.product_id = p.id
+                WHERE s.id = ?
+        `
         
         err := db.DB.QueryRow(query, saleID).Scan(
                 &sale.ID,
@@ -173,6 +293,14 @@ func GenerateReceipt(saleID int) (string, error) {
                 &custEmail,
                 &custPhone,
                 &sale.SaleDate,
+                &customerID,
+                &customerName,
+                &loyaltyDiscount,
+                &pointsEarned,
+                &pointsUsed,
+                &loyaltyTier,
+                &rewardID,
+                &rewardName,
         )
         
         if err != nil {
@@ -197,6 +325,32 @@ func GenerateReceipt(saleID int) (string, error) {
         }
         if custPhone.Valid {
                 sale.CustomerPhone = custPhone.String
+        }
+        
+        // Transfer loyalty program values
+        if customerID.Valid {
+                sale.CustomerID = int(customerID.Int64)
+        }
+        if customerName.Valid {
+                sale.CustomerName = customerName.String
+        }
+        if loyaltyDiscount.Valid {
+                sale.LoyaltyDiscount = loyaltyDiscount.Float64
+        }
+        if pointsEarned.Valid {
+                sale.PointsEarned = int(pointsEarned.Int64)
+        }
+        if pointsUsed.Valid {
+                sale.PointsUsed = int(pointsUsed.Int64)
+        }
+        if loyaltyTier.Valid {
+                sale.LoyaltyTier = loyaltyTier.String
+        }
+        if rewardID.Valid {
+                sale.RewardID = int(rewardID.Int64)
+        }
+        if rewardName.Valid {
+                sale.RewardName = rewardName.String
         }
         
         // Format the receipt
@@ -239,13 +393,42 @@ func GenerateReceipt(saleID int) (string, error) {
         }
         
         // Customer info if available
-        if sale.CustomerEmail != "" || sale.CustomerPhone != "" {
+        if sale.CustomerID > 0 || sale.CustomerEmail != "" || sale.CustomerPhone != "" {
                 sb.WriteString("-------------------------------------------\n")
+                
+                // Display customer name if available
+                if sale.CustomerName != "" {
+                        sb.WriteString(fmt.Sprintf("Customer: %s\n", sale.CustomerName))
+                }
+                
                 if sale.CustomerEmail != "" {
-                        sb.WriteString(fmt.Sprintf("Customer Email: %s\n", sale.CustomerEmail))
+                        sb.WriteString(fmt.Sprintf("Email: %s\n", sale.CustomerEmail))
                 }
                 if sale.CustomerPhone != "" {
-                        sb.WriteString(fmt.Sprintf("Customer Phone: %s\n", sale.CustomerPhone))
+                        sb.WriteString(fmt.Sprintf("Phone: %s\n", sale.CustomerPhone))
+                }
+                
+                // Display loyalty program info if available
+                if sale.CustomerID > 0 {
+                        if sale.LoyaltyTier != "" {
+                                sb.WriteString(fmt.Sprintf("Loyalty Tier: %s\n", sale.LoyaltyTier))
+                        }
+                        
+                        if sale.LoyaltyDiscount > 0 {
+                                sb.WriteString(fmt.Sprintf("Loyalty Discount: $%.2f\n", sale.LoyaltyDiscount))
+                        }
+                        
+                        if sale.PointsEarned > 0 {
+                                sb.WriteString(fmt.Sprintf("Points Earned: %d\n", sale.PointsEarned))
+                        }
+                        
+                        if sale.PointsUsed > 0 {
+                                sb.WriteString(fmt.Sprintf("Points Redeemed: %d\n", sale.PointsUsed))
+                        }
+                        
+                        if sale.RewardName != "" {
+                                sb.WriteString(fmt.Sprintf("Reward Applied: %s\n", sale.RewardName))
+                        }
                 }
         }
         
