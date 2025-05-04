@@ -15,18 +15,14 @@ import (
 var (
         cfgFile    string
         dbPath     string
-        mode       string
-        port       int
         showBanner bool
         debug      bool
 
         rootCmd = &cobra.Command{
                 Use:   "pos",
                 Short: "Terminal-based Point of Sale system",
-                Long: `A terminal-based Point of Sale (POS) system with three operating modes:
-1. Classic CLI Mode — Command-based interface
-2. Agent Mode — HTTP server for remote commands
-3. AI Assistant Mode — Natural language interface`,
+                Long: `A terminal-based Point of Sale (POS) system that provides
+a classic command-line interface for managing your business operations.`,
                 PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
                         // Show welcome banner if enabled
                         if showBanner && cmd.Use != "version" && cmd.Use != "help" {
@@ -71,18 +67,11 @@ func init() {
         // Define flags for the root command
         rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.termpos.yaml)")
         rootCmd.PersistentFlags().StringVar(&dbPath, "db", "./pos.db", "database path")
-        rootCmd.PersistentFlags().StringVar(&mode, "mode", "classic", "operating mode (classic, agent, assistant)")
-        rootCmd.PersistentFlags().IntVar(&port, "port", 8000, "port for agent mode server")
         rootCmd.PersistentFlags().BoolVar(&showBanner, "banner", true, "show welcome banner")
         rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug logging")
 
         // Initialize the CLI commands
         initClassicCommands()
-        initAgentCommand()
-        initMinimalAgentCommand()  // Add the minimal agent command
-        initAssistantCommand()
-        initUserCommands()
-        initStaffCommands()
 }
 
 // ensureDirectoriesExist makes sure required directories are available
@@ -135,8 +124,6 @@ func initConfig() {
 
         var config struct {
                 DBPath string `yaml:"db_path"`
-                Mode   string `yaml:"mode"`
-                Port   int    `yaml:"port"`
         }
 
         if err := yaml.Unmarshal(data, &config); err != nil {
@@ -148,20 +135,12 @@ func initConfig() {
         if !rootCmd.PersistentFlags().Changed("db") && config.DBPath != "" {
                 dbPath = config.DBPath
         }
-        if !rootCmd.PersistentFlags().Changed("mode") && config.Mode != "" {
-                mode = config.Mode
-        }
-        if !rootCmd.PersistentFlags().Changed("port") && config.Port != 0 {
-                port = config.Port
-        }
 }
 
 // createDefaultConfig creates a default configuration file
 func createDefaultConfig(path string) {
         config := map[string]interface{}{
                 "db_path": "./pos.db",
-                "mode":    "classic",
-                "port":    8000,
         }
 
         data, err := yaml.Marshal(config)

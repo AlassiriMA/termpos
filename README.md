@@ -1,10 +1,6 @@
 # TermPOS - Terminal Point of Sale System
 
-TermPOS is a minimal, terminal-based Point of Sale (POS) system written in Go. It provides three operating modes:
-
-1. **Classic CLI Mode** — Command-based interface (e.g., `add`, `sell`, `report`)
-2. **Agent Mode** — HTTP server for remote commands
-3. **AI Assistant Mode** — Natural language interface (e.g., "add 3 lattes at $5")
+TermPOS is a minimal, terminal-based Point of Sale (POS) system written in Go. It provides a clean, command-line interface for managing your business operations.
 
 ## Features
 
@@ -21,7 +17,6 @@ TermPOS is a minimal, terminal-based Point of Sale (POS) system written in Go. I
 - SQLite storage for data persistence
 - Docker support for containerized deployment
 - Clean terminal-formatted tables and outputs
-- Multiple operating modes for different use cases
 
 ## Installation
 
@@ -138,36 +133,6 @@ docker-compose down
 
 # Find staff by search term
 ./termpos staff find manager
-```
-
-### Agent Mode (HTTP Server)
-
-```bash
-# Start the agent server
-./termpos --mode agent --port 8000
-
-# Use HTTP to interact with the POS system 
-# (Examples using curl)
-curl -X GET http://localhost:8000/products
-curl -X POST http://localhost:8000/products -d '{"name":"Espresso","price":4.50,"stock":20}'
-curl -X GET http://localhost:8000/reports/summary
-curl -X GET http://localhost:8000/reports/daily
-curl -X GET http://localhost:8000/reports/top?limit=10
-```
-
-### AI Assistant Mode
-
-```bash
-# Start the assistant mode
-./termpos --mode assistant
-
-# Then use natural language commands like:
-> add 5 muffins at $2.50
-> sell 2 coffee
-> show inventory
-> what are my top selling products?
-> show sales report
-> show daily sales
 ```
 
 ### Backup and Security

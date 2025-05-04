@@ -8,13 +8,10 @@ services:
     image: termpos:latest
     container_name: termpos-app
     restart: unless-stopped
-    ports:
-      - "8000:8000"  # For agent mode HTTP server
     volumes:
       - termpos-data:/app/data
       - termpos-config:/app/config
       - termpos-backups:/app/backups
-    command: ["--mode", "classic"]
     environment:
       - POS_DB_PATH=/app/data/pos.db
       - POS_CONFIG_PATH=/app/config/config.json
